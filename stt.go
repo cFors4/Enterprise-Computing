@@ -3,11 +3,10 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
-
-	"github.com/gorilla/mux"
 )
 
 const (
@@ -18,50 +17,65 @@ const (
 	KEY = "d76745e51adf4408b1f29d7a4362dc39"
 )
 
-func check(e error) {
-	if e != nil {
-		panic(e)
-	}
+type request_struct struct {
+	Text []byte `json:"speech"`
 }
+
 func SpeechToText(w http.ResponseWriter, r *http.Request) {
-	t := map[string]interface{}{}
-	if err := json.NewDecoder(r.Body).Decode(&t); err == nil {
-		if speech, ok := t["speech"].([]byte); ok {
-			if text, err := Service(speech); err == nil {
-				u := map[string]interface{}{"text": text}
-				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(u)
-			} else {
-				w.WriteHeader(http.StatusInternalServerError)
-			}
-		} else {
-			w.WriteHeader(http.StatusBadRequest)
+	if r.URL.Path != "/stt" {
+		http.Error(w, "404 not found.", http.StatusNotFound)
+		return
+	}
+
+	switch r.Method {
+	case "POST":
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Could not decode request body", http.StatusBadRequest)
+			return
 		}
+		var t request_struct
+		err = json.Unmarshal(body, &t)
+		if err != nil {
+			http.Error(w, "Could not decode request JSON", http.StatusBadRequest)
+		}
+		speech := t.Text
+		textOutput := ServiceSTT(speech)
+		fmt.Fprintf(w, textOutput)
+	default:
+		fmt.Fprintf(w, "Sorry, only POST methods are supported")
 	}
 }
 
-func Service(speech []byte) (string, error) {
+func ServiceSTT(speech []byte) string {
 	client := &http.Client{}
-	if req, err := http.NewRequest("GET", URI, bytes.NewReader(speech)); err == nil {
-		req.Header.Set("Content-Type", "audio/wav;codecs=audio/pcm;samplerate=16000")
-		req.Header.Set("Ocp-Apim-Subscription-Key", KEY)
-		if rsp, err := client.Do(req); err == nil {
-			defer rsp.Body.Close()
-			if rsp.StatusCode == http.StatusOK {
-				body, err3 := ioutil.ReadAll(rsp.Body)
-				check(err3)
-				return string(body), nil
-			} else {
-				return "", errors.New("cannot convert to speech to text")
-			}
-		}
+	fmt.Printf("%s\n", URI)
+	req, err := http.NewRequest("POST", URI, bytes.NewReader(speech))
+	req.Header.Set("Content-Type",
+		"audio/wav;codecs=audio/pcm;samplerate=16000")
+	req.Header.Set("Ocp-Apim-Subscription-Key", KEY)
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
 	}
-	return "", errors.New("Service")
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return string(body)
 }
 
 func main() {
-	r := mux.NewRouter()
-	// document
-	r.HandleFunc("/stt", SpeechToText).Methods("POST")
-	http.ListenAndServe(":3002", r)
+	port := 3002
+	portStr := fmt.Sprintf(":%d", port)
+
+	http.HandleFunc("/stt", SpeechToText)
+	fmt.Printf("Listening on port: %d\n", port)
+	if err := http.ListenAndServe(portStr, nil); err != nil {
+		log.Fatal(err)
+	}
 }

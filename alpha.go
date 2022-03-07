@@ -2,10 +2,11 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
+	"fmt"
+	"io/ioutil"
+	"log"
 	"net/http"
-
-	"github.com/gorilla/mux"
+	"strings"
 )
 
 const (
@@ -13,44 +14,64 @@ const (
 	APPID    = "JXWPV6-WW86KHYYLR"
 )
 
+type request_struct struct {
+	Text string `json:"text"`
+}
+
 func Alpha(w http.ResponseWriter, r *http.Request) {
-	t := map[string]interface{}{}
-	if err := json.NewDecoder(r.Body).Decode(&t); err == nil {
-		if question, ok := t["text"].(string); ok {
-			if text, err := ServiceAlpha(question); err == nil {
-				u := map[string]interface{}{"text": text}
-				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(u)
-			} else {
-				w.WriteHeader(http.StatusInternalServerError)
-			}
-		} else {
-			w.WriteHeader(http.StatusBadRequest)
+	if r.URL.Path != "/alpha" {
+		http.Error(w, "404 not found.", http.StatusNotFound)
+		return
+	}
+
+	switch r.Method {
+	case "POST":
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Could not decode request body", http.StatusBadRequest)
+			return
 		}
-	} else {
-		w.WriteHeader(http.StatusBadRequest)
+		var t request_struct
+		err = json.Unmarshal(body, &t)
+		if err != nil {
+			http.Error(w, "Could not decode request JSON", http.StatusBadRequest)
+		}
+		text := t.Text
+		output := ServiceAlpha(text)
+		fmt.Fprintf(w, output)
+	default:
+		fmt.Fprintf(w, "Sorry, only POST methods are supported")
 	}
 }
 
-func ServiceAlpha(question string) (interface{}, error) {
-	client := &http.Client{}
-	uri := URIALPHA + "result?i=" + question + "%3F&appid=" + APPID
-	if req, err := http.NewRequest("GET", uri, nil); err == nil {
-		if rsp, err := client.Do(req); err == nil {
-			if rsp.StatusCode == http.StatusOK {
-				t := map[string]interface{}{}
-				if err := json.NewDecoder(rsp.Body).Decode(&t); err == nil {
-					return t["text"], nil
-				}
-			}
-		}
+func ServiceAlpha(input string) string {
+	appID := "JXWPV6-WW86KHYYLR"
+	input = strings.ReplaceAll(input, " ", "+")
+	u := URIALPHA + "result?appid=" + appID + "&i=" + input + "%3F&timeout=5&units=metric"
+	fmt.Printf("%s\n", u)
+
+	resp, err := http.Get(u)
+	if err != nil {
+		log.Fatal(err)
 	}
-	return nil, errors.New("Service")
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return string(body)
 }
 
 func main() {
-	r := mux.NewRouter()
-	// document
-	r.HandleFunc("/alpha", Alpha).Methods("POST")
-	http.ListenAndServe(":3001", r)
+	port := 3001
+	portStr := fmt.Sprintf(":%d", port)
+
+	http.HandleFunc("/alpha", Alpha)
+	fmt.Printf("Listening on port: %d\n", port)
+	if err := http.ListenAndServe(portStr, nil); err != nil {
+		log.Fatal(err)
+	}
 }
