@@ -3,68 +3,82 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
-
-	"github.com/gorilla/mux"
 )
 
 const (
 	REGIONTTS = "uksouth"
-	uriTTS    = "https://" + REGIONTTS + ".tts.speech.microsoft.com/" +
+	URITTS    = "https://" + REGIONTTS + ".tts.speech.microsoft.com/" +
 		"cognitiveservices/v1"
 	KEYTTS = "d76745e51adf4408b1f29d7a4362dc39"
 )
 
-func checkTTS(e error) {
-	if e != nil {
-		panic(e)
-	}
+type request_struct struct {
+	Text []byte `json:"text"`
 }
 
 func TextToSpeech(w http.ResponseWriter, r *http.Request) {
-	t := map[string]interface{}{}
-	if err := json.NewDecoder(r.Body).Decode(&t); err == nil {
-		if text, ok := t["text"].([]byte); ok {
-			if speech, err := ServiceTTS(text); err == nil {
-				u := map[string]interface{}{"speech": speech}
-				err3 := ioutil.WriteFile("speech.wav", speech, 0644)
-				checkTTS(err3)
-				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode(u)
-			} else {
-				w.WriteHeader(http.StatusInternalServerError)
-			}
-		} else {
-			w.WriteHeader(http.StatusBadRequest)
+	if r.URL.Path != "/stt" {
+		http.Error(w, "404 not found.", http.StatusNotFound)
+		return
+	}
+
+	switch r.Method {
+	case "POST":
+		body, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "Could not decode request body", http.StatusBadRequest)
+			return
 		}
+		var t request_struct
+		err = json.Unmarshal(body, &t)
+		if err != nil {
+			http.Error(w, "Could not decode request JSON", http.StatusBadRequest)
+		}
+		text := t.Text
+		speechOutput := ServiceTTS(text)
+		fmt.Fprintf(w, speechOutput)
+	default:
+		fmt.Fprintf(w, "Sorry, only POST methods are supported")
 	}
 }
 
-func ServiceTTS(text []byte) ([]byte, error) {
+func ServiceTTS(text []byte) string {
+	fmt.Printf("%s\n", URITTS)
 	client := &http.Client{}
-	if req, err := http.NewRequest("GET", uriTTS, bytes.NewBuffer(text)); err == nil {
-		req.Header.Set("Content-Type", "application/ssml+xml")
-		req.Header.Set("Ocp-Apim-Subscription-Key", KEYTTS)
-		req.Header.Set("X-Microsoft-OutputFormat", "riff-16khz-16bit-mono-pcm")
-		if rsp, err := client.Do(req); err == nil {
-			defer rsp.Body.Close()
-			if rsp.StatusCode == http.StatusOK {
-				body, err3 := ioutil.ReadAll(rsp.Body)
-				checkTTS(err3)
-				return body, nil
-			} else {
-				return nil, errors.New("cannot convert to speech to text")
-			}
-		}
+	fmt.Printf("%s\n", URITTS)
+	req, err := http.NewRequest("POST", URITTS, bytes.NewBuffer(text))
+	if err != nil {
+		log.Fatal(err)
 	}
-	return nil, errors.New("Service")
+	req.Header.Set("Content-Type", "application/ssml+xml")
+	req.Header.Set("Ocp-Apim-Subscription-Key", KEYTTS)
+	req.Header.Set("X-Microsoft-OutputFormat", "riff-16khz-16bit-mono-pcm")
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer resp.Body.Close()
+
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return string(body)
 }
 
 func main() {
-	r := mux.NewRouter()
-	// document
-	r.HandleFunc("/tts", TextToSpeech).Methods("POST")
-	http.ListenAndServe(":3003", r)
+	port := 3003
+	portStr := fmt.Sprintf(":%d", port)
+
+	http.HandleFunc("/tts", TextToSpeech)
+	fmt.Printf("Listening on port: %d\n", port)
+	if err := http.ListenAndServe(portStr, nil); err != nil {
+		log.Fatal(err)
+	}
 }

@@ -51,6 +51,9 @@ func ServiceSTT(speech []byte) string {
 	client := &http.Client{}
 	fmt.Printf("%s\n", URI)
 	req, err := http.NewRequest("POST", URI, bytes.NewReader(speech))
+	if err != nil {
+		log.Fatal(err)
+	}
 	req.Header.Set("Content-Type",
 		"audio/wav;codecs=audio/pcm;samplerate=16000")
 	req.Header.Set("Ocp-Apim-Subscription-Key", KEY)
