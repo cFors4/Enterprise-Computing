@@ -42,7 +42,7 @@ func SpeechToText(w http.ResponseWriter, r *http.Request) {
 
 func Service(speech []byte) (string, error) {
 	client := &http.Client{}
-	if req, err := http.NewRequest("POST", URI, bytes.NewReader(speech)); err == nil {
+	if req, err := http.NewRequest("GET", URI, bytes.NewReader(speech)); err == nil {
 		req.Header.Set("Content-Type", "audio/wav;codecs=audio/pcm;samplerate=16000")
 		req.Header.Set("Ocp-Apim-Subscription-Key", KEY)
 		if rsp, err := client.Do(req); err == nil {

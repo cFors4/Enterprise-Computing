@@ -44,7 +44,7 @@ func TextToSpeech(w http.ResponseWriter, r *http.Request) {
 
 func ServiceTTS(text []byte) ([]byte, error) {
 	client := &http.Client{}
-	if req, err := http.NewRequest("POST", uriTTS, bytes.NewBuffer(text)); err == nil {
+	if req, err := http.NewRequest("GET", uriTTS, bytes.NewBuffer(text)); err == nil {
 		req.Header.Set("Content-Type", "application/ssml+xml")
 		req.Header.Set("Ocp-Apim-Subscription-Key", KEYTTS)
 		req.Header.Set("X-Microsoft-OutputFormat", "riff-16khz-16bit-mono-pcm")
