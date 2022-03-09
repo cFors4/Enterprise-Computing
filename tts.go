@@ -17,11 +17,11 @@ const (
 )
 
 type request_struct struct {
-	Text []byte `json:"text"`
+	Text string `json:"text"`
 }
 
 func TextToSpeech(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/stt" {
+	if r.URL.Path != "/tts" {
 		http.Error(w, "404 not found.", http.StatusNotFound)
 		return
 	}
@@ -39,17 +39,21 @@ func TextToSpeech(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Could not decode request JSON", http.StatusBadRequest)
 		}
 		text := t.Text
-		speechOutput := ServiceTTS(text)
-		fmt.Fprintf(w, speechOutput)
+		byteText := []byte(text)
+		speechOutput := ServiceTTS(byteText)
+		err3 := ioutil.WriteFile("speech.wav", speechOutput, 0644)
+		if err3 != nil {
+			http.Error(w, "Could not write speech file", http.StatusBadRequest)
+		}
+		fmt.Println(speechOutput)
+		fmt.Fprintf(w, string(speechOutput))
 	default:
 		fmt.Fprintf(w, "Sorry, only POST methods are supported")
 	}
 }
 
-func ServiceTTS(text []byte) string {
-	fmt.Printf("%s\n", URITTS)
+func ServiceTTS(text []byte) []byte {
 	client := &http.Client{}
-	fmt.Printf("%s\n", URITTS)
 	req, err := http.NewRequest("POST", URITTS, bytes.NewBuffer(text))
 	if err != nil {
 		log.Fatal(err)
@@ -63,13 +67,15 @@ func ServiceTTS(text []byte) string {
 	}
 
 	defer resp.Body.Close()
-
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
+	if resp.StatusCode == http.StatusOK {
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			log.Fatal(err)
+		}
+		return body
 	}
 
-	return string(body)
+	return nil
 }
 
 func main() {

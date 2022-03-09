@@ -17,7 +17,7 @@ const (
 	KEY = "d76745e51adf4408b1f29d7a4362dc39"
 )
 
-type request_struct struct {
+type request struct {
 	Text []byte `json:"speech"`
 }
 
@@ -34,7 +34,7 @@ func SpeechToText(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Could not decode request body", http.StatusBadRequest)
 			return
 		}
-		var t request_struct
+		var t request
 		err = json.Unmarshal(body, &t)
 		if err != nil {
 			http.Error(w, "Could not decode request JSON", http.StatusBadRequest)
