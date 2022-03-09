@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -40,14 +41,20 @@ func SpeechToText(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Could not decode request JSON", http.StatusBadRequest)
 		}
 		speech := t.Text
-		textOutput := ServiceSTT(speech)
-		fmt.Fprintf(w, textOutput)
+		if textOutput, err := ServiceSTT(speech); err == nil {
+			u := map[string]interface{}{"text": textOutput}
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(u)
+			return
+		} else {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
 	default:
 		fmt.Fprintf(w, "Sorry, only POST methods are supported")
 	}
 }
 
-func ServiceSTT(speech []byte) string {
+func ServiceSTT(speech []byte) (interface{}, error) {
 	client := &http.Client{}
 	fmt.Printf("%s\n", URI)
 	req, err := http.NewRequest("POST", URI, bytes.NewReader(speech))
@@ -57,6 +64,7 @@ func ServiceSTT(speech []byte) string {
 	req.Header.Set("Content-Type",
 		"audio/wav;codecs=audio/pcm;samplerate=16000")
 	req.Header.Set("Ocp-Apim-Subscription-Key", KEY)
+
 	resp, err := client.Do(req)
 	if err != nil {
 		log.Fatal(err)
@@ -64,12 +72,13 @@ func ServiceSTT(speech []byte) string {
 
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
+	t := map[string]interface{}{}
+	if err := json.NewDecoder(resp.Body).Decode(&t); err == nil {
+		return t["DisplayText"], nil
 	}
+	// just return DisplayText as text json
+	return nil, errors.New("cannot convert speech to text")
 
-	return string(body)
 }
 
 func main() {

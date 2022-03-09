@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -37,14 +38,20 @@ func Alpha(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Could not decode request JSON", http.StatusBadRequest)
 		}
 		text := t.Text
-		output := ServiceAlpha(text)
-		fmt.Fprintf(w, output)
+		if output, err := ServiceAlpha(text); err == nil {
+			u := map[string]interface{}{"text": output}
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(u)
+			return
+		} else {
+			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		}
 	default:
 		fmt.Fprintf(w, "Sorry, only POST methods are supported")
 	}
 }
 
-func ServiceAlpha(input string) string {
+func ServiceAlpha(input string) (string, error) {
 	appID := "JXWPV6-WW86KHYYLR"
 	input = strings.ReplaceAll(input, " ", "+")
 	u := URIALPHA + "result?appid=" + appID + "&i=" + input + "%3F&timeout=5&units=metric"
@@ -52,17 +59,17 @@ func ServiceAlpha(input string) string {
 
 	resp, err := http.Get(u)
 	if err != nil {
-		log.Fatal(err)
+		return "", errors.New("Cannot GET response from wolfram alpha")
 	}
 
 	defer resp.Body.Close()
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err)
+		return "", errors.New("Cannot read response from wolfram alpha")
 	}
 
-	return string(body)
+	return string(body), nil
 }
 
 func main() {

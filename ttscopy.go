@@ -9,7 +9,6 @@ import (
 	"log"
 	"net/http"
 	"net/http/httputil"
-	"os"
 )
 
 const (
@@ -36,13 +35,16 @@ func TextToSpeech(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Could not decode request body", http.StatusBadRequest)
 			return
 		}
+		// decode json
 		var t request
 		err = json.Unmarshal(body, &t)
 		if err != nil {
 			http.Error(w, "Could not decode request JSON", http.StatusBadRequest)
 		}
+		// send request
 		text := t.Text
-		if speech, err := ServiceTTS(text); err == nil {
+		byteText := []byte(text)
+		if speech, err := ServiceTTS(byteText); err == nil {
 			u := map[string]interface{}{"speech": speech}
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(u)
@@ -54,72 +56,51 @@ func TextToSpeech(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "Sorry, only POST methods are supported")
 	}
 }
-func ServiceTTS(input string) ([]byte, error) {
-	client := &http.Client{}
-	createXMLInput(input)
-	text, err := ioutil.ReadFile("text3.xml")
 
+//Handle request TTS
+func ServiceTTS(text []byte) (interface{}, error) {
+	//Create POST request with URI, text input, and headers
+	client := &http.Client{}
+	fmt.Printf("%s\n", URITTS)
+	//TODO: Modify text.xml to have text parameter
+	text, err := ioutil.ReadFile("text.xml")
 	req, err := http.NewRequest("POST", URITTS, bytes.NewBuffer(text))
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	req.Header.Set("Content-Type", "application/ssml+xml")
 	req.Header.Set("Ocp-Apim-Subscription-Key", KEYTTS)
 	req.Header.Set("X-Microsoft-OutputFormat", "riff-16khz-16bit-mono-pcm")
+
+	// Print request *DEBUG
 	res, err := httputil.DumpRequest(req, true)
 	if err != nil {
 		log.Fatal(err)
 	}
 	fmt.Println("Sent Request:")
 	fmt.Print(string(res))
-	rsp, err2 := client.Do(req)
-	if err2 != nil {
-		log.Fatal(err2)
+
+	//Send POST request
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
 	}
 
-	defer rsp.Body.Close()
-
-	if rsp.StatusCode == http.StatusOK {
-		body, err3 := ioutil.ReadAll(rsp.Body)
-		if err3 != nil {
-			log.Fatal(err3)
+	defer resp.Body.Close()
+	//Determine response
+	if resp.StatusCode == http.StatusOK {
+		t := map[string]interface{}{}
+		if err := json.NewDecoder(resp.Body).Decode(&t); err != nil {
+			fmt.Println("ERROR")
+			log.Fatal(err)
+			return nil, errors.New("Service")
 		}
-		ioutil.WriteFile("speech.wav", body, 0644)
-		return body, nil
+		return t["speech"], nil
 	} else {
-		fmt.Printf("\nStatus Code: \n %d\n", rsp.StatusCode)
-		return nil, errors.New("cannot convert text to speech")
+		fmt.Printf("\nStatus Code: \n %d\n", resp.StatusCode)
+		log.Fatal(err)
+		return nil, errors.New("Service")
 	}
-}
-
-func createXMLInput(input string) {
-	f, err := os.Create("text3.xml")
-	if err != nil {
-		fmt.Println(err)
-		f.Close()
-		return
-	}
-	d := []string{"<?xml version='1.0'?>",
-		"<speak version='1.0' xml:lang='en-US'>",
-		"<voice xml:lang='en-US' name='en-US-JennyNeural'>",
-		input,
-		"</voice>",
-		"</speak>"}
-
-	for _, v := range d {
-		fmt.Fprintln(f, v)
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-	}
-	err = f.Close()
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println("file written successfully")
 }
 
 func main() {
