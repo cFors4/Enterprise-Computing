@@ -47,6 +47,7 @@ func SpeechToText(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(u)
 			return
 		} else {
+			fmt.Printf("\nERROR: Internal Server Error\n")
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		}
 	default:
@@ -59,7 +60,8 @@ func ServiceSTT(speech []byte) (interface{}, error) {
 	fmt.Printf("%s\n", URI)
 	req, err := http.NewRequest("POST", URI, bytes.NewReader(speech))
 	if err != nil {
-		log.Fatal(err)
+		fmt.Printf("\nERROR: Cannot display request\n")
+		return nil, errors.New("Cannot display request")
 	}
 	req.Header.Set("Content-Type",
 		"audio/wav;codecs=audio/pcm;samplerate=16000")
@@ -67,7 +69,8 @@ func ServiceSTT(speech []byte) (interface{}, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Printf("\nERROR: HTTP Client cannot carry out request\n")
+		return nil, errors.New("HTTP Client cannot carry out request")
 	}
 
 	defer resp.Body.Close()
@@ -76,8 +79,9 @@ func ServiceSTT(speech []byte) (interface{}, error) {
 	if err := json.NewDecoder(resp.Body).Decode(&t); err == nil {
 		return t["DisplayText"], nil
 	}
-	// just return DisplayText as text json
-	return nil, errors.New("cannot convert speech to text")
+	// fmt.Printf(err.Error())
+	fmt.Printf("\nERROR: Cannot convert speech to text\n")
+	return nil, errors.New("Cannot convert speech to text")
 
 }
 

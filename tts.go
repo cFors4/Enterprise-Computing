@@ -19,7 +19,7 @@ const (
 	KEYTTS = "d76745e51adf4408b1f29d7a4362dc39"
 )
 
-type request struct {
+type request_T struct {
 	Text string `json:"text"`
 }
 
@@ -36,7 +36,7 @@ func TextToSpeech(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Could not decode request body", http.StatusBadRequest)
 			return
 		}
-		var t request
+		var t request_T
 		err = json.Unmarshal(body, &t)
 		if err != nil {
 			http.Error(w, "Could not decode request JSON", http.StatusBadRequest)
@@ -63,19 +63,20 @@ func ServiceTTS(input string) ([]byte, error) {
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	req.Header.Set("Content-Type", "application/ssml+xml")
 	req.Header.Set("Ocp-Apim-Subscription-Key", KEYTTS)
 	req.Header.Set("X-Microsoft-OutputFormat", "riff-16khz-16bit-mono-pcm")
+	//DSIPLAY request server-side
 	res, err := httputil.DumpRequest(req, true)
 	if err != nil {
-		log.Fatal(err)
+		return nil, errors.New("Cannot display request")
 	}
 	fmt.Println("Sent Request:")
 	fmt.Print(string(res))
+
 	rsp, err2 := client.Do(req)
 	if err2 != nil {
-		log.Fatal(err2)
+		return nil, errors.New("HTTP Client cannot carry out request")
 	}
 
 	defer rsp.Body.Close()
@@ -83,13 +84,13 @@ func ServiceTTS(input string) ([]byte, error) {
 	if rsp.StatusCode == http.StatusOK {
 		body, err3 := ioutil.ReadAll(rsp.Body)
 		if err3 != nil {
-			log.Fatal(err3)
+			return nil, errors.New("Cannot read response")
 		}
 		ioutil.WriteFile("speech.wav", body, 0644)
 		return body, nil
 	} else {
 		fmt.Printf("\nStatus Code: \n %d\n", rsp.StatusCode)
-		return nil, errors.New("cannot convert text to speech")
+		return nil, errors.New("Cannot convert text to speech")
 	}
 }
 
