@@ -48,6 +48,7 @@ func TextToSpeech(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(u)
 			return
 		} else {
+			fmt.Fprintf(w, "ERROR")
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		}
 	default:
@@ -86,7 +87,8 @@ func ServiceTTS(input string) ([]byte, error) {
 		if err3 != nil {
 			return nil, errors.New("Cannot read response")
 		}
-		ioutil.WriteFile("speech.wav", body, 0644)
+		os.Create("answertts.wav")
+		ioutil.WriteFile("answertts.wav", body, 0644)
 		return body, nil
 	} else {
 		fmt.Printf("\nStatus Code: \n %d\n", rsp.StatusCode)
